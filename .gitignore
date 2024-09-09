@@ -1,0 +1,8 @@
+.vscode
+VulkanSDK
+*.dSYM
+.DS_Store
+./build/*
+scop
+app
+.env
