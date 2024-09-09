@@ -6,7 +6,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 #include <iostream>
-#include <vector>  // 추가
+#include <optional>
+#include <vector>
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -63,6 +64,11 @@ class HelloTriangleApplication {
   GLFWwindow* window;
   VkInstance instance;
   VkDebugUtilsMessengerEXT debugMessenger;
+  VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+  struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+    bool isComplete() { return graphicsFamily.has_value(); }
+  };
 
   void initWindow() {
     glfwInit();
@@ -77,7 +83,81 @@ class HelloTriangleApplication {
     pickPhysicalDevice();
   }
 
-  void pickPhysicalDevice() {}
+  void pickPhysicalDevice() {
+    // 추가: 물리적 장치 선택 로직 구현
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+    std::cout << "device count: " << deviceCount << std::endl;
+    if (deviceCount == 0) {
+      throw std::runtime_error("failed to find GPUs with Vulkan support!");
+    }
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+    for (const auto& device : devices) {
+      std::cout << "Device: " << device << std::endl;
+      if (isDeviceSuitable(device)) {
+        std::cout << "Found suitable device!" << std::endl;
+        physicalDevice = device;
+        break;
+      }
+    }
+
+    if (physicalDevice == VK_NULL_HANDLE) {
+      throw std::runtime_error("failed to find a suitable GPU!");
+    }
+  }
+  // 추가: 장치의 적합성을 검사하는 함수
+  bool isDeviceSuitable(VkPhysicalDevice device) {
+    QueueFamilyIndices indices = findQueueFamilies(device);
+
+    return indices.isComplete();
+
+    VkPhysicalDeviceProperties deviceProperties;
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    /*
+    GPU 정보 출력
+    std::cout << "Device Name : " << deviceProperties.deviceName << std::endl;
+    std::cout << "Device Type :  " << deviceProperties.deviceType << std::endl;
+    std::cout << "Device limits.maxImageDimension2D : "
+              << deviceProperties.limits.maxImageDimension2D << std::endl;
+    std::cout << "Device geometryShader : " << deviceFeatures.geometryShader
+              << std::endl;
+    std::cout << "Device tessellationShader : "
+              << deviceFeatures.tessellationShader << std::endl;
+    std::cout << "Device shaderFloat64 : " << deviceFeatures.shaderFloat64
+              << std::endl;
+
+    // 컴퓨트 셰이더 관련 정보 출력
+    std::cout << "Max Compute Shared Memory Size: "
+              << deviceProperties.limits.maxComputeSharedMemorySize
+              << std::endl;
+    std::cout << "Max Compute Work Group Count: "
+              << deviceProperties.limits.maxComputeWorkGroupCount[0] << ", "
+              << deviceProperties.limits.maxComputeWorkGroupCount[1] << ", "
+              << deviceProperties.limits.maxComputeWorkGroupCount[2]
+              << std::endl;
+    std::cout << "Max Compute Work Group Invocations: "
+              << deviceProperties.limits.maxComputeWorkGroupInvocations
+              << std::endl;
+    std::cout << "Max Compute Work Group Size: "
+              << deviceProperties.limits.maxComputeWorkGroupSize[0] << ", "
+              << deviceProperties.limits.maxComputeWorkGroupSize[1] << ", "
+              << deviceProperties.limits.maxComputeWorkGroupSize[2]
+              << std::endl;
+    */
+    /*
+    Apple m1 을 위한 조건 완화, geometryShader가 없음
+    return deviceProperties.deviceType ==
+        VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+        deviceFeatures.geometryShader;
+    */
+    return true;
+  }
 
   void mainLoop() {
     while (!glfwWindowShouldClose(window)) {
@@ -219,6 +299,54 @@ class HelloTriangleApplication {
     std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
     return VK_FALSE;
+  }
+
+  QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+    QueueFamilyIndices indices;
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
+                                             nullptr);
+    std::cout << "queueFamilyCount: " << queueFamilyCount << std::endl;
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
+                                             queueFamilies.data());
+
+    int i = 0;
+    for (const auto& queueFamily : queueFamilies) {
+      /*
+       std::cout << "Queue Family " << i << ":" << std::endl;
+       std::cout << "  Queue Count: " << queueFamily.queueCount << std::endl;
+       std::cout << "  Supported Operations:" << std::endl;
+       if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+         std::cout << "    Graphics" << std::endl;
+       if (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+         std::cout << "    Compute" << std::endl;
+       if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
+         std::cout << "    Transfer" << std::endl;
+       if (queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT)
+         std::cout << "    Sparse Binding" << std::endl;
+       if (queueFamily.queueFlags & VK_QUEUE_PROTECTED_BIT)
+         std::cout << "    Protected" << std::endl;
+       std::cout << "  Timestamp Valid Bits: " << queueFamily.timestampValidBits
+                 << std::endl;
+       std::cout << "  Min Image Transfer Granularity: "
+                 << queueFamily.minImageTransferGranularity.width << "x"
+                 << queueFamily.minImageTransferGranularity.height << "x"
+                 << queueFamily.minImageTransferGranularity.depth << std::endl;
+      */
+
+      if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+        indices.graphicsFamily = i;
+      }
+      if (indices.isComplete()) {
+        break;
+      }
+
+      i++;
+    }
+
+    return indices;
   }
 };
 
