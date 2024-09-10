@@ -69,6 +69,8 @@ class HelloTriangleApplication {
     std::optional<uint32_t> graphicsFamily;
     bool isComplete() { return graphicsFamily.has_value(); }
   };
+  VkDevice device;
+  VkQueue graphicsQueue;
 
   void initWindow() {
     glfwInit();
@@ -81,6 +83,50 @@ class HelloTriangleApplication {
     createInstance();
     setupDebugMessenger();
     pickPhysicalDevice();
+    createLogicalDevice();
+  }
+
+  void createLogicalDevice() {
+    // 물리적 장치에서 큐 패밀리 인덱스 찾기
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+    // 큐 생성 정보 구조체 초기화
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    // 그래픽스 큐 패밀리 인덱스 지정
+    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+    // 생성할 큐의 수 지정 (여기서는 1개)
+    queueCreateInfo.queueCount = 1;
+
+    // 큐 우선순위 설정 (0.0 ~ 1.0)
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.queueCreateInfoCount = 1;
+
+    createInfo.pEnabledFeatures = &deviceFeatures;
+
+    createInfo.enabledExtensionCount = 0;
+
+    if (enableValidationLayers) {
+      createInfo.enabledLayerCount =
+          static_cast<uint32_t>(validationLayers.size());
+      createInfo.ppEnabledLayerNames = validationLayers.data();
+    } else {
+      createInfo.enabledLayerCount = 0;
+    }
+
+    if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) !=
+        VK_SUCCESS) {
+      throw std::runtime_error("failed to create logical device!");
+    }
+    vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
   }
 
   void pickPhysicalDevice() {
@@ -167,6 +213,7 @@ class HelloTriangleApplication {
 
   // 리소스 정리 함수
   void cleanup() {
+    vkDestroyDevice(device, nullptr);
     if (enableValidationLayers) {
       DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
