@@ -7,6 +7,7 @@
 #include <glm/vec4.hpp>
 #include <iostream>
 #include <optional>
+#include <set>
 #include <vector>
 
 const std::vector<const char*> validationLayers = {
@@ -67,10 +68,16 @@ class HelloTriangleApplication {
   VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
   struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
-    bool isComplete() { return graphicsFamily.has_value(); }
+    std::optional<uint32_t> presentFamily;
+
+    bool isComplete() {
+      return graphicsFamily.has_value() && presentFamily.has_value();
+    }
   };
   VkDevice device;
   VkQueue graphicsQueue;
+  VkQueue presentQueue;
+  VkSurfaceKHR surface;
 
   void initWindow() {
     glfwInit();
@@ -82,36 +89,44 @@ class HelloTriangleApplication {
   void initVulkan() {
     createInstance();
     setupDebugMessenger();
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
   }
-
+  void createSurface() {
+    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) !=
+        VK_SUCCESS) {
+      throw std::runtime_error("failed to create window surface!");
+    }
+    // std::cout << "In FUNCTION : createSurface" << std::endl;
+    // std::cout << "Surface created successfully." << std::endl;
+  }
   void createLogicalDevice() {
     // 물리적 장치에서 큐 패밀리 인덱스 찾기
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
-    // 큐 생성 정보 구조체 초기화
-    VkDeviceQueueCreateInfo queueCreateInfo{};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    // 그래픽스 큐 패밀리 인덱스 지정
-    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-    // 생성할 큐의 수 지정 (여기서는 1개)
-    queueCreateInfo.queueCount = 1;
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
+                                              indices.presentFamily.value()};
 
-    // 큐 우선순위 설정 (0.0 ~ 1.0)
     float queuePriority = 1.0f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
+    for (uint32_t queueFamily : uniqueQueueFamilies) {
+      VkDeviceQueueCreateInfo queueCreateInfo{};
+      queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+      queueCreateInfo.queueFamilyIndex = queueFamily;
+      queueCreateInfo.queueCount = 1;
+      queueCreateInfo.pQueuePriorities = &queuePriority;
+      queueCreateInfos.push_back(queueCreateInfo);
+    }
 
     VkPhysicalDeviceFeatures deviceFeatures{};
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-
-    createInfo.pQueueCreateInfos = &queueCreateInfo;
-    createInfo.queueCreateInfoCount = 1;
-
+    createInfo.queueCreateInfoCount =
+        static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.pEnabledFeatures = &deviceFeatures;
-
     createInfo.enabledExtensionCount = 0;
 
     if (enableValidationLayers) {
@@ -127,6 +142,14 @@ class HelloTriangleApplication {
       throw std::runtime_error("failed to create logical device!");
     }
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+    vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+
+    /*
+    std::cout << "In FUNCTION : createLogicalDevice" << std::endl;
+    std::cout << "Logical device created successfully." << std::endl;
+    std::cout << "Graphics Queue: " << graphicsQueue << std::endl;
+    std::cout << "Present Queue: " << presentQueue << std::endl;
+    */
   }
 
   void pickPhysicalDevice() {
@@ -158,13 +181,16 @@ class HelloTriangleApplication {
   bool isDeviceSuitable(VkPhysicalDevice device) {
     QueueFamilyIndices indices = findQueueFamilies(device);
 
+    // std::cout << "IN FUNCTION : isDeviceSuitable" << std::endl;
+    // std::cout << "Device suitability check:" << std::endl;
+    // std::cout << "  Graphics Family: "
+    //           << (indices.graphicsFamily.has_value() ? "Found" : "Not Found")
+    //           << std::endl;
+    // std::cout << "  Present Family: "
+    //           << (indices.presentFamily.has_value() ? "Found" : "Not Found")
+    //           << std::endl;
+
     return indices.isComplete();
-
-    VkPhysicalDeviceProperties deviceProperties;
-    VkPhysicalDeviceFeatures deviceFeatures;
-    vkGetPhysicalDeviceProperties(device, &deviceProperties);
-    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
     /*
     GPU 정보 출력
     std::cout << "Device Name : " << deviceProperties.deviceName << std::endl;
@@ -214,6 +240,8 @@ class HelloTriangleApplication {
   // 리소스 정리 함수
   void cleanup() {
     vkDestroyDevice(device, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);  // 추가: surface 정리
+
     if (enableValidationLayers) {
       DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
@@ -385,6 +413,11 @@ class HelloTriangleApplication {
 
       if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
         indices.graphicsFamily = i;
+      }
+      VkBool32 presentSupport = false;
+      vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+      if (presentSupport) {
+        indices.presentFamily = i;
       }
       if (indices.isComplete()) {
         break;
