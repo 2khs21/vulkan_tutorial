@@ -7,3 +7,4 @@ scop
 app
 app_debug
 .env
+**/*.spv

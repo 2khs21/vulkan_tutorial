@@ -4,22 +4,28 @@ CXX = g++
 # Compiler flags
 CXXFLAGS = -std=c++17
 
+# Vulkan SDK path
+VULKAN_SDK = /Users/hyunsoo/VulkanSDK/1.3.290.0
+
 # Include paths
-INCLUDES = -I"/Users/hyunsoo/VulkanSDK/1.3.290.0/macOS/include" \
+INCLUDES = -I"$(VULKAN_SDK)/macOS/include" \
            -I/opt/homebrew/Cellar/glfw/3.4/include \
            -I/opt/homebrew/Cellar/glm/1.0.1/include
-
 # Library paths and libraries
-LIBS = -L"/Users/hyunsoo/VulkanSDK/1.3.290.0/macOS/lib" \
+LIBS = -L"$(VULKAN_SDK)/macOS/lib" \
        -L/opt/homebrew/Cellar/glfw/3.4/lib \
        -lglfw -lvulkan \
        -framework Cocoa -framework OpenGL -framework IOKit -framework CoreVideo
-
 # Source files
 SRCS = main.cpp
 
 # Output executable name
 TARGET = app
+
+# Shader files
+VERT_SHADER = shaders/shader.vert
+FRAG_SHADER = shaders/shader.frag
+GLSLC = $(VULKAN_SDK)/macOS/bin/glslc
 
 # Debug flags
 DEBUG_FLAGS = -g -DDEBUG
@@ -38,10 +44,16 @@ else
 endif
 
 # Targets
-all: $(TARGET)
+all: compile_shaders $(TARGET)
 
-$(TARGET): $(SRCS)
+$(TARGET): $(SRCS) $(VERT_SPV) $(FRAG_SPV)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@ $(LIBS)
+
+$(VERT_SPV): $(VERT_SHADER)
+	$(GLSLC) $< -o $@
+
+$(FRAG_SPV): $(FRAG_SHADER)
+	$(GLSLC) $< -o $@
 
 debug:
 	$(MAKE) MODE=debug
@@ -50,8 +62,8 @@ release:
 	$(MAKE) MODE=release
 
 clean:
-	rm -f $(TARGET) $(TARGET)_debug
-
+	rm -f $(TARGET) $(TARGET)_debug shaders/*.spv
+    
 re: clean all
 
-.PHONY: all debug release clean re
+.PHONY: all debug release compile_shaders clean re
