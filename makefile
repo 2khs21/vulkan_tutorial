@@ -25,6 +25,8 @@ TARGET = app
 # Shader files
 VERT_SHADER = shaders/shader.vert
 FRAG_SHADER = shaders/shader.frag
+VERT_SPV = shaders/vert.spv
+FRAG_SPV = shaders/frag.spv
 GLSLC = $(VULKAN_SDK)/macOS/bin/glslc
 
 # Debug flags
@@ -46,8 +48,10 @@ endif
 # Targets
 all: compile_shaders $(TARGET)
 
-$(TARGET): $(SRCS) $(VERT_SPV) $(FRAG_SPV)
+$(TARGET): $(SRCS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@ $(LIBS)
+
+compile_shaders: $(VERT_SPV) $(FRAG_SPV)
 
 $(VERT_SPV): $(VERT_SHADER)
 	$(GLSLC) $< -o $@
